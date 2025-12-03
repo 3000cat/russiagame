@@ -438,8 +438,11 @@
         let dropInterval = 1000; // 初始下落速度 (1000ms)
         let lastTime = 0;
         let isGameOver = false;
-        let isGamePaused = true; // 新增：遊戲初始狀態為暫停
+        let isGamePaused = true; // 遊戲初始狀態為暫停
         let animationFrameId;
+        
+        // **修正：新增旗標以避免硬降時的競態條件 (race condition) 導致的錯誤**
+        let isDroppingOrLocking = false; 
 
         // -------------------------
         // 遊戲核心邏輯
@@ -467,6 +470,7 @@
                 isGamePaused = false;
                 heldPiece = null;
                 canHold = true;
+                isDroppingOrLocking = false; // 重置旗標
 
                 scoreDisplay.textContent = score;
                 levelDisplay.textContent = level;
@@ -664,7 +668,10 @@
          * 硬降 (Hard Drop) - 即時將方塊下落到底部
          */
         function hardDrop() {
-            if (isGameOver || !currentPiece || isGamePaused) return;
+            // **修正：檢查旗標，防止操作重入**
+            if (isGameOver || !currentPiece || isGamePaused || isDroppingOrLocking) return;
+
+            isDroppingOrLocking = true; // 鎖定操作
 
             let ghostY = currentPiece.y;
             // 計算可以下落的最終位置
@@ -683,6 +690,9 @@
             mergePiece();
             clearLines();
             spawnPiece();
+            
+            // 操作完成，解除鎖定
+            isDroppingOrLocking = false;
         }
 
 
@@ -1051,6 +1061,7 @@
                     rotated = true;
                     break;
                 case ' ': // Space 鍵: 硬降 (即時下落)
+                    // **修正：硬降操作已在 hardDrop 內部保護**
                     hardDrop(); 
                     return; 
                 case 'c':
