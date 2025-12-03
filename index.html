@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可愛俄羅斯方塊</title>
+    <!-- 載入 Tone.js 函式庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght400;700&display=swap');
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #fce4ec; /* 柔和粉紅背景 */
+            font-family: 'Fredoka', cursive, sans-serif;
+            color: #333;
+        }
+
+        .game-container {
+            position: relative; /* 為了讓 Overlay 能夠正確定位 */
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 0 0 8px #ffd8e4; /* 內外邊框陰影 */
+            transition: transform 0.3s ease;
+        }
+
+        #tetrisCanvas {
+            border: 4px solid #ff99c8; /* 亮粉色邊框 */
+            background-color: #f7f7ff; /* 淺藍白色遊戲區 */
+            border-radius: 12px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .sidebar {
+            width: 150px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-panel {
+            background-color: #ffe5cc; /* 柔和橘色背景 */
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .info-panel h2 {
+            margin-top: 0;
+            color: #d9534f; /* 可愛紅色標題 */
+            font-size: 1.5rem;
+            text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        .info-panel p {
+            margin: 5px 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #444;
+        }
+
+        #nextPieceCanvas, #heldPieceCanvas {
+            border: 2px solid #ff99c8;
+            background-color: #f7f7ff;
+            border-radius: 8px;
+            margin: 10px auto;
+        }
+        
+        /* 遊戲開始/說明疊層 */
+        #startOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95); /* 幾乎不透明 */
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 20; /* 比 Game Over 高 */
+            border-radius: 20px;
+        }
+
+        .start-box {
+            background-color: #d4edda; /* 柔和綠色背景 */
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            border: 5px solid #5cb85c;
+            max-width: 80%;
+        }
+
+        .start-box h1 {
+            color: #5cb85c;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        #startInstructions {
+            text-align: left;
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #c3e6cb;
+            background-color: #e2f0e4;
+            border-radius: 8px;
+        }
+        
+        #startInstructions ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        #startInstructions li {
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        #startButton {
+            padding: 10px 20px;
+            background-color: #ff99c8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 4px #ff6b9a;
+            transition: all 0.1s;
+            margin-top: 15px;
+        }
+        
+        #startButton:active {
+            box-shadow: 0 1px #ff6b9a;
+            transform: translateY(3px);
+        }
+
+        /* 遊戲結束疊層 (保持原樣) */
+        #gameOverOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.85);
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+            border-radius: 20px;
+        }
+
+        .game-over-box {
+            background-color: #fff357; 
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            border: 5px solid #ff4a65;
+            animation: bounce 0.5s infinite alternate;
+        }
+
+        .game-over-box h1 {
+            color: #ff4a65;
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .game-over-box p {
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+        
+        /* 響應式調整 */
+        @media (max-width: 768px) {
+            .game-container {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15), 0 0 0 5px #ffd8e4;
+            }
+            .sidebar {
+                width: 100%;
+                flex-direction: row;
+                justify-content: space-around;
+                flex-wrap: wrap; 
+            }
+            .info-panel {
+                flex: 1;
+                min-width: 120px;
+                padding: 10px;
+                font-size: 1rem;
+            }
+            #tetrisCanvas {
+                width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <!-- 遊戲開始疊層 (新增) -->
+        <div id="startOverlay">
+            <div class="start-box">
+                <h1>可愛俄羅斯方塊</h1>
+                <p>這是一款經典的俄羅斯方塊，搭配可愛的方塊造型與音效！</p>
+                <div id="startInstructions">
+                    <h3>遊戲目標與升級</h3>
+                    <ul>
+                        <li>目標：透過堆疊方塊並清除線條來獲得高分。</li>
+                        <li>**升級條件：每清除 10 行線條，等級會提升 1 級。**</li>
+                        <li>等級越高，方塊下落速度越快，挑戰性越高！</li>
+                    </ul>
+                    <h3>操控方式</h3>
+                    <ul>
+                        <li>← / →: 移動</li>
+                        <li>↓: 軟降 (加速下落)</li>
+                        <li>**Space**: 硬降 (即時下落)</li>
+                        <li>↑: 旋轉</li>
+                        <li>**C**: 暫存/交換方塊</li>
+                        <li>R: 重新開始 (任何時候)</li>
+                    </ul>
+                </div>
+                <button id="startButton">點擊開始遊戲或按任意鍵</button>
+            </div>
+        </div>
+
+        <!-- 遊戲結束疊層 -->
+        <div id="gameOverOverlay" style="display: none;">
+            <div class="game-over-box">
+                <h1>遊戲結束!</h1>
+                <p>最終分數: <span id="finalScore">0</span></p>
+                <p>請按 R 鍵重新開始</p>
+            </div>
+        </div>
+
+        <!-- 主遊戲區 -->
+        <canvas id="tetrisCanvas" width="300" height="600"></canvas>
+        
+        <!-- 側邊欄 -->
+        <div class="sidebar">
+            
+            <!-- 暫存方塊 (Hold) -->
+            <div class="info-panel">
+                <h2>暫存 (C)</h2>
+                <canvas id="heldPieceCanvas" width="120" height="100"></canvas>
+            </div>
+
+            <!-- 分數和等級 -->
+            <div class="info-panel">
+                <h2>分數</h2>
+                <p id="scoreDisplay">0</p>
+                <h2>等級</h2>
+                <p id="levelDisplay">1</p>
+            </div>
+
+            <!-- 下一個方塊預覽 -->
+            <div class="info-panel">
+                <h2>下一個</h2>
+                <canvas id="nextPieceCanvas" width="120" height="100"></canvas>
+            </div>
+            
+            <!-- 原來的操控說明區塊已移除 -->
+        </div>
+    </div>
+
+    <script>
+        // -------------------------
+        // 遊戲設定常數
+        // -------------------------
+        const COLS = 10;
+        const ROWS = 20;
+        const BLOCK_SIZE = 30;
+
+        const canvas = document.getElementById('tetrisCanvas');
+        const ctx = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('nextPieceCanvas');
+        const nextCtx = nextCanvas.getContext('2d');
+        const holdCanvas = document.getElementById('heldPieceCanvas');
+        const holdCtx = holdCanvas.getContext('2d');
+
+
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const levelDisplay = document.getElementById('levelDisplay');
+        const finalScore = document.getElementById('finalScore');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        // 新增開始畫面元素
+        const startOverlay = document.getElementById('startOverlay');
+        const startButton = document.getElementById('startButton');
+
+        // 俄羅斯方塊定義: [形狀, 顏色 (更鮮明的可愛風格)]
+        const TETROMINOES = [
+            // [shape, color_hex]
+            [[[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]], '#00ffff'], // I (0) - 鮮明青
+            [[[1,0,0], [1,1,1], [0,0,0]], '#007bff'],              // J (1) - 鮮明藍
+            [[[0,0,1], [1,1,1], [0,0,0]], '#ff8c00'],            // L (2) - 鮮明橘
+            [[[1,1], [1,1]], '#ffeb3b'],                         // O (3) - 鮮明黃
+            [[[0,1,1], [1,1,0], [0,0,0]], '#4caf50'],             // S (4) - 鮮明綠
+            [[[1,1,0], [0,1,1], [0,0,0]], '#f44336']                // Z (6) - 鮮明紅
+        ];
+        
+        // -------------------------
+        // 音效設置
+        // -------------------------
+        let audioInitialized = false;
+
+        // 鎖定/落定音效 (低頻打擊)
+        const lockSynth = new Tone.MembraneSynth().toDestination();
+        
+        // 清行音效 (高頻和弦)
+        const clearSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.2 }
+        }).toDestination();
+        
+        // 旋轉/移動音效 (簡單提示音)
+        const moveRotateSynth = new Tone.Synth({
+            oscillator: { type: "square" },
+            envelope: { attack: 0.001, decay: 0.05, sustain: 0.0, release: 0.05 }
+        }).toDestination();
+        
+        // 硬降音效 (快速下降音)
+        const hardDropSynth = new Tone.FMSynth({
+            harmonicity: 3,
+            modulationIndex: 10,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.1 }
+        }).toDestination();
+
+        // 遊戲結束音效 (長音和噪聲)
+        const gameOverSynth = new Tone.NoiseSynth({
+            envelope: { attack: 0.1, decay: 0.4, sustain: 0.1, release: 1.0 },
+            noise: { type: "white" }
+        }).toDestination();
+
+        /**
+         * 初始化音訊上下文 (必須由使用者互動觸發)
+         */
+        function initializeAudio() {
+            if (!audioInitialized) {
+                // Tone.start() 必須在使用者互動後調用
+                Tone.start();
+                audioInitialized = true;
+                // console.log("Audio Context initialized.");
+            }
+        }
+
+        /**
+         * 播放鎖定音效
+         */
+        function playLockSound() {
+            if (audioInitialized) {
+                lockSynth.triggerAttackRelease("C2", "8n");
+            }
+        }
+
+        /**
+         * 播放清行音效
+         * @param {number} lines 清除的行數
+         */
+        function playClearSound(lines) {
+            if (audioInitialized) {
+                const now = Tone.now();
+                const notes = ["G4", "C5", "E5", "G5"];
+                // 根據清除行數調整音高和時長
+                const lineIndex = Math.min(lines, 4) - 1; 
+                clearSynth.triggerAttackRelease(notes.slice(0, lineIndex + 2), "16n", now, 0.5);
+            }
+        }
+        
+        /**
+         * 播放旋轉音效
+         */
+        function playRotateSound() {
+            if (audioInitialized) {
+                moveRotateSynth.triggerAttackRelease("D5", "32n");
+            }
+        }
+
+        /**
+         * 播放移動音效 (左右移動)
+         */
+        function playMoveSound() {
+            if (audioInitialized) {
+                moveRotateSynth.triggerAttackRelease("C4", "64n");
+            }
+        }
+        
+        /**
+         * 播放硬降音效
+         */
+        function playHardDropSound() {
+            if (audioInitialized) {
+                // 快速下降的音高
+                hardDropSynth.triggerAttackRelease("A4", "32n", Tone.now());
+                hardDropSynth.triggerAttackRelease("A3", "32n", Tone.now() + 0.05);
+            }
+        }
+
+        /**
+         * 播放遊戲結束音效
+         */
+        function playGameOverSound() {
+            if (audioInitialized) {
+                gameOverSynth.triggerAttackRelease("2n"); // 播放一個較長的噪聲持續音
+            }
+        }
+
+        // -------------------------
+        // 遊戲狀態變數
+        // -------------------------
+        let board = [];
+        let currentPiece = null;
+        let nextPiece = null;
+        let heldPiece = null;      // 暫存的方塊
+        let canHold = true;        // 每回合只能暫存一次
+        let score = 0;
+        let level = 1;
+        let linesCleared = 0;
+        let dropCounter = 0;
+        let dropInterval = 1000; // 初始下落速度 (1000ms)
+        let lastTime = 0;
+        let isGameOver = false;
+        let isGamePaused = true; // 新增：遊戲初始狀態為暫停
+        let animationFrameId;
+
+        // -------------------------
+        // 遊戲核心邏輯
+        // -------------------------
+
+        /**
+         * 啟動遊戲 (從開始畫面進入或重新開始)
+         */
+        function startGame() {
+            if (isGamePaused) {
+                // 隱藏開始/遊戲結束畫面
+                startOverlay.style.display = 'none';
+                gameOverOverlay.style.display = 'none';
+
+                // 確保音訊初始化 (點擊按鈕或第一次按鍵時會觸發)
+                initializeAudio(); 
+                
+                // 重置所有遊戲狀態
+                board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+                score = 0;
+                level = 1;
+                linesCleared = 0;
+                dropInterval = 1000;
+                isGameOver = false;
+                isGamePaused = false;
+                heldPiece = null;
+                canHold = true;
+
+                scoreDisplay.textContent = score;
+                levelDisplay.textContent = level;
+
+                // 重新生成方塊並啟動循環
+                nextPiece = createPiece(Math.floor(Math.random() * TETROMINOES.length));
+                spawnPiece();
+                
+                // 啟動動畫循環
+                if (!animationFrameId) {
+                    // 確保取消前一個可能殘留的 requestAnimationFrame
+                    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                    update();
+                }
+            }
+        }
+
+
+        /**
+         * 初始化遊戲板 (從載入開始，顯示開始畫面)
+         */
+        function initBoard() {
+            // FIX: 必須在 draw 之前初始化 board 陣列，避免讀取 undefined 造成錯誤
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); 
+            
+            isGamePaused = true;
+            isGameOver = false;
+            // 重置分數顯示
+            scoreDisplay.textContent = 0;
+            levelDisplay.textContent = 1;
+            
+            startOverlay.style.display = 'flex';
+            gameOverOverlay.style.display = 'none';
+            draw(); // 繪製空白畫布
+            drawNextPiece();
+            drawHeldPiece();
+        }
+
+        /**
+         * 創建一個新方塊
+         * @param {number} index 方塊索引 (同時作為類型索引)
+         */
+        function createPiece(index) {
+            const [matrix, color] = TETROMINOES[index];
+            return {
+                matrix: matrix,
+                color: color,
+                typeIndex: index, // 儲存類型索引，用於繪製造型
+                // 方塊初始位置 (X軸居中)
+                x: Math.floor(COLS / 2) - Math.floor(matrix[0].length / 2),
+                y: 0
+            };
+        }
+
+        /**
+         * 生成新方塊，並將下一個方塊設為當前方塊
+         */
+        function spawnPiece() {
+            currentPiece = nextPiece;
+            nextPiece = createPiece(Math.floor(Math.random() * TETROMINOES.length));
+            canHold = true; // 每次生成新方塊後，允許暫存一次
+            
+            // 檢查遊戲是否結束
+            if (checkCollision(currentPiece, 0, 0)) {
+                isGameOver = true;
+                isGamePaused = true;
+                finalScore.textContent = score;
+                gameOverOverlay.style.display = 'flex';
+                playGameOverSound(); // 播放遊戲結束音效
+                // 停止遊戲循環
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null; // 重置 ID
+                return;
+            }
+            
+            drawNextPiece();
+            drawHeldPiece();
+        }
+
+        /**
+         * 檢查碰撞
+         */
+        function checkCollision(piece, offsetX, offsetY) {
+            const matrix = piece.matrix;
+            for (let y = 0; y < matrix.length; y++) {
+                for (let x = 0; x < matrix[y].length; x++) {
+                    if (matrix[y][x] !== 0) {
+                        const newX = piece.x + x + offsetX;
+                        const newY = piece.y + y + offsetY;
+
+                        // 檢查邊界
+                        if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                            return true;
+                        }
+                        
+                        // 檢查棋盤上的其他方塊
+                        if (newY >= 0 && board[newY] && board[newY][newX] !== 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        /**
+         * 合併方塊到遊戲板上
+         */
+        function mergePiece() {
+            const matrix = currentPiece.matrix;
+            for (let y = 0; y < matrix.length; y++) {
+                for (let x = 0; x < matrix[y].length; x++) {
+                    if (matrix[y][x] !== 0) {
+                        const boardY = currentPiece.y + y;
+                        const boardX = currentPiece.x + x;
+                        if (boardY >= 0) {
+                            // 儲存方塊的顏色和類型索引，以便繪製造型
+                            board[boardY][boardX] = { 
+                                color: currentPiece.color, 
+                                type: currentPiece.typeIndex
+                            };
+                        }
+                    }
+                }
+            }
+            playLockSound(); // 播放鎖定音效
+        }
+
+        /**
+         * 清除完整的線條
+         */
+        function clearLines() {
+            let lines = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell !== 0)) {
+                    // 移除該行
+                    board.splice(y, 1);
+                    // 在頂部添加新行
+                    board.unshift(Array(COLS).fill(0));
+                    lines++;
+                    y++; // 由於splice操作，需要重新檢查當前y值
+                }
+            }
+
+            if (lines > 0) {
+                // 播放清行音效，傳入清除的行數
+                playClearSound(lines); 
+
+                // 根據清除的行數計分
+                const scores = [0, 100, 300, 500, 800]; 
+                score += scores[lines] * level;
+                linesCleared += lines;
+                scoreDisplay.textContent = score;
+                
+                // 檢查升級
+                if (linesCleared >= level * 10) {
+                    level++;
+                    levelDisplay.textContent = level;
+                    // 加快速度
+                    dropInterval = Math.max(100, 1000 - (level - 1) * 70);
+                }
+            }
+        }
+
+        /**
+         * 旋轉方塊
+         */
+        function rotatePiece() {
+            const matrix = currentPiece.matrix;
+            
+            // 複製一份矩陣進行旋轉
+            let newMatrix = matrix.map((row, colIndex) => 
+                matrix.map(row => row[colIndex])
+            ).map(row => row.reverse());
+            
+            const originalMatrix = currentPiece.matrix;
+            currentPiece.matrix = newMatrix;
+            
+            // 處理旋轉後的碰撞 (牆踢 Wall Kick)
+            const offsets = [0, 1, -1, 2, -2]; 
+            for (const offset of offsets) {
+                currentPiece.x += offset;
+                if (!checkCollision(currentPiece, 0, 0)) {
+                    playRotateSound(); // 旋轉成功播放音效
+                    return; // 旋轉成功
+                }
+                currentPiece.x -= offset; // 恢復偏移
+            }
+            
+            // 旋轉失敗，恢復原狀
+            currentPiece.matrix = originalMatrix;
+        }
+        
+        /**
+         * 硬降 (Hard Drop) - 即時將方塊下落到底部
+         */
+        function hardDrop() {
+            if (isGameOver || !currentPiece || isGamePaused) return;
+
+            let ghostY = currentPiece.y;
+            // 計算可以下落的最終位置
+            while (!checkCollision(currentPiece, 0, ghostY + 1)) {
+                ghostY++;
+                score += 2; // 硬降得分
+            }
+            
+            // 設置最終位置
+            currentPiece.y = ghostY;
+            scoreDisplay.textContent = score;
+
+            playHardDropSound(); // 播放硬降音效
+
+            // 立即鎖定方塊並生成新方塊
+            mergePiece();
+            clearLines();
+            spawnPiece();
+        }
+
+
+        /**
+         * 暫存方塊 (Hold)
+         */
+        function holdPiece() {
+            if (isGameOver || !currentPiece || !canHold || isGamePaused) return;
+
+            // 禁止本次下落週期再次交換
+            canHold = false;
+            
+            // 暫存當前方塊 (只儲存屬性，不複製遊戲中的狀態如 x, y)
+            const pieceToHold = {
+                matrix: currentPiece.matrix,
+                color: currentPiece.color,
+                typeIndex: currentPiece.typeIndex
+            };
+            
+            if (heldPiece) {
+                // 如果已經有暫存方塊，則交換
+                currentPiece = heldPiece;
+                // 重設位置 (新方塊從頂部中央開始)
+                currentPiece.x = Math.floor(COLS / 2) - Math.floor(currentPiece.matrix[0].length / 2);
+                currentPiece.y = 0;
+                heldPiece = pieceToHold;
+            } else {
+                // 如果沒有暫存方塊，直接暫存並生成新方塊
+                heldPiece = pieceToHold;
+                spawnPiece();
+                return;
+            }
+
+            playMoveSound(); // 播放交換音效 (與移動音效相同)
+            drawHeldPiece();
+            draw(); // 立即重繪以顯示交換後的方塊
+        }
+
+
+        /**
+         * 方塊下落 (軟降)
+         */
+        function dropPiece() {
+            if (isGameOver || isGamePaused) return;
+
+            if (!checkCollision(currentPiece, 0, 1)) {
+                currentPiece.y++;
+            } else {
+                // 碰撞發生，鎖定方塊，清行，生成新方塊
+                mergePiece();
+                clearLines();
+                spawnPiece();
+            }
+            dropCounter = 0; // 重置下落計數器
+        }
+
+        // -------------------------
+        // 繪圖與渲染
+        // -------------------------
+
+        /**
+         * 繪製單個方塊 (保持可愛造型邏輯)
+         */
+        function drawBlock(px, py, color, typeIndex, context) {
+            context = context || ctx;
+            const halfSize = BLOCK_SIZE / 2;
+            const center = { x: px + halfSize, y: py + halfSize };
+            
+            // 1. 繪製主體 (填色)
+            context.fillStyle = color;
+            context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+            
+            // 2. 邊框和高光 (可愛風格的邊框)
+            context.strokeStyle = 'rgba(255, 255, 255, 0.9)'; // 更亮的高光
+            context.lineWidth = 3; // 更粗的邊框
+            context.strokeRect(px + 1, py + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+
+            // 3. 內部可愛裝飾 (依據 typeIndex)
+            context.save(); 
+            
+            // 設置陰影/光暈效果，讓內部圖案更突出
+            context.shadowBlur = 5;
+            context.shadowColor = 'rgba(255, 255, 255, 0.8)'; // 白色光暈
+            context.fillStyle = 'white'; // 裝飾圖案顏色
+            context.strokeStyle = 'white';
+            context.lineWidth = 4; // 增粗線條
+
+            switch (typeIndex) {
+                case 0: // I (Cyan) - Diamond Pattern (鑽石/菱形)
+                    context.beginPath();
+                    context.moveTo(center.x, py + 5);
+                    context.lineTo(px + BLOCK_SIZE - 5, center.y);
+                    context.lineTo(center.x, py + BLOCK_SIZE - 5);
+                    context.lineTo(px + 5, center.y);
+                    context.closePath();
+                    context.fill();
+                    break;
+                case 1: // J (Blue) - Bubble/Dots (水滴/氣泡)
+                    context.beginPath();
+                    context.arc(center.x - 6, center.y - 6, 4, 0, Math.PI * 2);
+                    context.fill();
+                    context.beginPath();
+                    context.arc(center.x + 6, center.y + 6, 4, 0, Math.PI * 2);
+                    context.fill();
+                    context.beginPath();
+                    context.arc(center.x + 6, center.y - 6, 2, 0, Math.PI * 2);
+                    context.fill();
+                    break;
+                case 2: // L (Orange) - Cloud Outline (雲朵輪廓)
+                    context.lineWidth = 3;
+                    context.beginPath();
+                    // 繪製三個重疊的圓形成雲朵形狀
+                    context.arc(px + 10, py + 15, 6, 0, Math.PI * 2);
+                    context.arc(px + 20, py + 15, 6, 0, Math.PI * 2);
+                    context.arc(px + 25, py + 10, 4, 0, Math.PI * 2);
+                    context.fill();
+                    break;
+                case 3: // O (Yellow) - Cross Star (星形/十字)
+                    context.beginPath();
+                    context.moveTo(px + 5, center.x);
+                    context.lineTo(px + BLOCK_SIZE - 5, center.x);
+                    context.stroke();
+                    context.beginPath();
+                    context.moveTo(center.x, py + 5);
+                    context.lineTo(center.x, py + BLOCK_SIZE - 5);
+                    context.stroke();
+                    break;
+                case 4: // S (Green) - Swirl/Clover (漩渦/四葉草)
+                    context.lineWidth = 4;
+                    context.beginPath();
+                    context.arc(center.x - 4, center.y - 4, 5, 0, Math.PI * 2);
+                    context.fill();
+                    context.beginPath();
+                    context.arc(center.x + 4, center.y + 4, 5, 0, Math.PI * 2);
+                    context.fill();
+                    break;
+                case 5: // T (Purple) - Solid Heart (實心愛心)
+                    // 使用貝茲曲線近似愛心形狀
+                    context.beginPath();
+                    context.moveTo(center.x, py + BLOCK_SIZE * 3 / 4);
+                    // 右半邊曲線
+                    context.bezierCurveTo(
+                        px + BLOCK_SIZE * 3 / 4, center.y - 5, // 控制點 1
+                        px + BLOCK_SIZE * 3 / 4, py + 5,      // 控制點 2
+                        center.x, py + 10                     // 頂部中點
+                    );
+                    // 左半邊曲線
+                    context.bezierCurveTo(
+                        px + BLOCK_SIZE / 4, py + 5,          // 控制點 1
+                        px + BLOCK_SIZE / 4, center.y - 5,    // 控制點 2
+                        center.x, py + BLOCK_SIZE * 3 / 4     // 底部中點
+                    );
+                    context.fill();
+                    break;
+                case 6: // Z (Red) - Diagonal Line (加粗對角線)
+                    context.lineWidth = 5;
+                    context.beginPath();
+                    context.moveTo(px + 5, py + 5);
+                    context.lineTo(px + BLOCK_SIZE - 5, py + BLOCK_SIZE - 5);
+                    context.stroke();
+                    break;
+            }
+            context.restore(); // 恢復上下文狀態 (移除陰影和光暈)
+            
+            // 4. 整體陰影 (保持輕微的邊緣陰影)
+            context.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            context.lineWidth = 1;
+            context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+        }
+
+        /**
+         * 繪製整個遊戲畫面
+         */
+        function draw() {
+            // 清空畫布
+            ctx.fillStyle = '#f7f7ff'; // 遊戲區背景色
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 繪製棋盤上已鎖定的方塊
+            for (let y = 0; y < ROWS; y++) {
+                // 這裡 board[y] 由於 initBoard 的修正，保證了不是 undefined
+                for (let x = 0; x < COLS; x++) {
+                    const cell = board[y][x]; 
+                    if (cell !== 0) {
+                        // 從物件中讀取顏色和類型索引，並傳入像素座標
+                        drawBlock(x * BLOCK_SIZE, y * BLOCK_SIZE, cell.color, cell.type);
+                    }
+                }
+            }
+
+            // 繪製當前下落中的方塊
+            if (currentPiece && !isGamePaused) {
+                const matrix = currentPiece.matrix;
+                const color = currentPiece.color;
+                const typeIndex = currentPiece.typeIndex;
+                
+                // 繪製鬼影 (Ghost Piece)
+                let ghostY = currentPiece.y;
+                while (!checkCollision(currentPiece, 0, ghostY + 1)) {
+                    ghostY++;
+                }
+
+                for (let y = 0; y < matrix.length; y++) {
+                    for (let x = 0; x < matrix[y].length; x++) {
+                        if (matrix[y][x] !== 0) {
+                            const ghostPx = (currentPiece.x + x) * BLOCK_SIZE;
+                            const ghostPy = (ghostY + y) * BLOCK_SIZE;
+                            
+                            // 鬼影顏色是半透明
+                            ctx.fillStyle = color + '40'; // 40 是半透明度
+                            ctx.fillRect(ghostPx, ghostPy, BLOCK_SIZE, BLOCK_SIZE);
+                            // 加上一個邊框讓鬼影更明顯
+                            ctx.strokeStyle = color;
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(ghostPx, ghostPy, BLOCK_SIZE, BLOCK_SIZE);
+                            
+                            // 實際方塊 (傳入像素座標和類型索引)
+                            drawBlock((currentPiece.x + x) * BLOCK_SIZE, (currentPiece.y + y) * BLOCK_SIZE, color, typeIndex);
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * 繪製下一個方塊
+         */
+        function drawNextPiece() {
+            nextCtx.fillStyle = '#f7f7ff';
+            nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+            if (nextPiece) {
+                const matrix = nextPiece.matrix;
+                const color = nextPiece.color;
+                const typeIndex = nextPiece.typeIndex;
+                const rows = matrix.length;
+                const cols = matrix[0].length;
+                
+                // 計算居中偏移量
+                const startX = (nextCanvas.width / 2) - (cols * BLOCK_SIZE / 2);
+                const startY = (nextCanvas.height / 2) - (rows * BLOCK_SIZE / 2);
+
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        if (matrix[y][x] !== 0) {
+                            const px = startX + x * BLOCK_SIZE;
+                            const py = startY + y * BLOCK_SIZE;
+                            
+                            // 繪製方塊，傳入 nextCtx
+                            drawBlock(px, py, color, typeIndex, nextCtx);
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * 繪製暫存方塊
+         */
+        function drawHeldPiece() {
+            holdCtx.fillStyle = '#f7f7ff';
+            holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+
+            if (heldPiece) {
+                const matrix = heldPiece.matrix;
+                const color = heldPiece.color;
+                const typeIndex = heldPiece.typeIndex;
+                const rows = matrix.length;
+                const cols = matrix[0].length;
+                
+                // 計算居中偏移量 (與 nextPiece 相同)
+                const startX = (holdCanvas.width / 2) - (cols * BLOCK_SIZE / 2);
+                const startY = (holdCanvas.height / 2) - (rows * BLOCK_SIZE / 2);
+
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        if (matrix[y][x] !== 0) {
+                            const px = startX + x * BLOCK_SIZE;
+                            const py = startY + y * BLOCK_SIZE;
+                            
+                            // 繪製方塊，傳入 holdCtx
+                            // 如果不能暫存，將其繪製成半透明以表示冷卻
+                            const ctxToUse = canHold ? holdCtx : holdCtx;
+                            const alpha = canHold ? 1.0 : 0.5;
+
+                            ctxToUse.globalAlpha = alpha;
+                            drawBlock(px, py, color, typeIndex, ctxToUse);
+                            ctxToUse.globalAlpha = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        // -------------------------
+        // 遊戲循環與控制
+        // -------------------------
+
+        /**
+         * 遊戲主循環
+         */
+        function update(time = 0) {
+            if (isGameOver || isGamePaused) return;
+            
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            dropCounter += deltaTime;
+            
+            // 檢查是否需要下落
+            if (dropCounter > dropInterval) {
+                dropPiece();
+            }
+
+            draw();
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        /**
+         * 處理鍵盤事件
+         */
+        function handleKey(event) {
+            // 如果遊戲在開始畫面上，任何按鍵都會啟動遊戲
+            if (isGamePaused && !isGameOver) {
+                startGame();
+                return; 
+            }
+            
+            // 處理遊戲結束時的重啟
+            if (isGameOver) {
+                if (event.key === 'r' || event.key === 'R') {
+                    startGame(); // 使用 startGame 替代 initBoard 進行重啟
+                }
+                return;
+            }
+
+            // 遊戲正在進行
+            initializeAudio(); // 確保音訊已啟用
+            if (!currentPiece) return;
+
+            let newX = currentPiece.x;
+            let newY = currentPiece.y;
+            let moved = false;
+            let rotated = false;
+
+            switch (event.key) {
+                case 'ArrowLeft':
+                    newX--;
+                    moved = true;
+                    break;
+                case 'ArrowRight':
+                    newX++;
+                    moved = true;
+                    break;
+                case 'ArrowDown':
+                    // 軟降
+                    newY++;
+                    score += 1; // 軟降得分
+                    scoreDisplay.textContent = score;
+                    moved = true;
+                    break;
+                case 'ArrowUp':
+                    // 旋轉
+                    rotatePiece();
+                    rotated = true;
+                    break;
+                case ' ': // Space 鍵: 硬降 (即時下落)
+                    hardDrop(); 
+                    return; 
+                case 'c':
+                case 'C': // C 鍵: 暫存
+                    holdPiece();
+                    return; 
+                case 'r':
+                case 'R': // 遊戲中按 R 鍵重新開始
+                    startGame();
+                    return;
+                default:
+                    return; 
+            }
+
+            // 只有移動或旋轉成功才應用變更
+            if (!rotated) {
+                const movedPiece = { ...currentPiece, x: newX, y: newY };
+                if (!checkCollision(movedPiece, 0, 0)) {
+                    currentPiece = movedPiece;
+                    if (moved && event.key !== 'ArrowDown') {
+                        playMoveSound(); // 播放左右移動音效
+                    }
+                }
+                
+                // 如果是向下移動，立即觸發一次下落檢查
+                if (event.key === 'ArrowDown' && checkCollision(currentPiece, 0, 1)) {
+                    dropPiece();
+                }
+            } else {
+                // 旋轉後檢查是否需要立即鎖定
+                if (checkCollision(currentPiece, 0, 1)) {
+                     // 如果旋轉後立即碰撞到底部，執行鎖定和清行
+                    setTimeout(dropPiece, 0); 
+                }
+            }
+            
+            // 繪製更新
+            draw();
+        }
+        
+        // 綁定開始按鈕的點擊事件
+        startButton.addEventListener('click', startGame);
+
+        // 初始化並開始遊戲 (顯示開始畫面)
+        initBoard();
+        document.addEventListener('keydown', handleKey);
+        
+        // 確保在 window 加載後，如果遊戲還未開始，至少可以繪製一次畫面
+        window.onload = function () {
+            if (!animationFrameId) {
+                draw();
+            }
+        }
+    </script>
+</body>
+</html>
